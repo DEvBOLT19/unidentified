@@ -3,96 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BOLT COMMAND | GLOBAL STRATEGIC v10.0</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>BOLT COMMAND | EARTH OPS</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;900&display=swap');
-        
-        :root { 
-            --accent: #00ff88; 
-            --bg: #000502; 
-            --panel: rgba(0,10,5,0.95); 
+
+        :root {
+            --accent: #00ff88;
+            --bg: #000502;
+            --panel: rgba(0, 12, 8, 0.88);
             --hazard: #ff3c3c;
             --glow: 0 0 15px rgba(0, 255, 136, 0.4);
         }
 
-        body { margin:0; background: var(--bg); color: var(--accent); font-family: 'Share Tech Mono'; overflow:hidden; }
-        #canvas-container { position:fixed; inset:0; z-index:1; }
-        
-        /* CRT SCANLINE EFFECT */
-        body::after { 
-            content: " "; position: fixed; inset: 0; 
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03)); 
-            z-index: 200; background-size: 100% 3px, 3px 100%; pointer-events: none; 
+        body { margin: 0; background: var(--bg); color: var(--accent); font-family: 'Share Tech Mono', monospace; overflow: hidden; }
+        #canvas-container { position: fixed; inset: 0; z-index: 1; }
+
+        body::after {
+            content: " "; position: fixed; inset: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 200; background-size: 100% 3px, 3px 100%; pointer-events: none;
         }
 
-        /* HUD ELEMENTS */
-        #hud-top { position:fixed; top:25px; left:25px; z-index:100; }
-        .glitch-input-wrap { border: 1px solid var(--accent); background: rgba(0,15,5,0.9); padding: 2px; display: flex; box-shadow: var(--glow); }
-        input { background: none; border: none; color: var(--accent); padding: 12px; width: 300px; font-family: inherit; outline: none; text-transform: uppercase; font-size: 0.9rem; }
-        .btn-scan { background: var(--accent); border: none; color: #000; padding: 0 25px; font-family: 'Orbitron'; cursor: pointer; font-weight: 900; letter-spacing: 1px; }
+        #hud { position: fixed; top: 18px; left: 18px; z-index: 120; }
+        .badge { border: 1px solid var(--accent); padding: 10px 12px; background: rgba(0, 15, 5, 0.9); box-shadow: var(--glow); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; }
 
-        #threat-level { position: fixed; bottom: 25px; left: 25px; z-index: 100; border-left: 3px solid var(--hazard); padding-left: 15px; }
-        
-        /* SIDE PANEL */
-        #sidebar { 
-            position:fixed; right:-420px; top:0; width:380px; height:100vh; z-index:150; 
-            background:var(--panel); border-left: 2px solid var(--accent); 
-            transition: 0.5s cubic-bezier(0.1, 0.8, 0.2, 1); display: flex; flex-direction: column; 
-            backdrop-filter: blur(10px);
+        #density { position: fixed; bottom: 18px; left: 18px; z-index: 120; border-left: 3px solid var(--hazard); padding-left: 12px; }
+
+        #intel {
+            position: fixed; right: 18px; top: 18px; width: 340px; z-index: 120;
+            background: var(--panel); border: 1px solid var(--accent); box-shadow: var(--glow);
+            padding: 16px; backdrop-filter: blur(8px);
         }
-        #sidebar.active { right:0; }
-        
-        #mini-map { width:100%; height:280px; filter: invert(1) hue-rotate(90deg) brightness(0.7) contrast(1.4); border-bottom: 1px solid var(--accent); }
-        .panel-data { padding: 30px; flex: 1; overflow-y: auto; }
-        .t-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(0,255,136,0.1); font-size: 0.85rem; }
-        .t-label { opacity: 0.5; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; }
-        
-        .weather-card { margin-top: 25px; background: rgba(0,255,136,0.03); border: 1px solid rgba(0,255,136,0.1); padding: 15px; }
-        .close-btn { width: 100%; padding: 15px; background: var(--accent); color: #000; font-family: 'Orbitron'; font-weight: 900; border: none; cursor: pointer; }
+        #intel h2 { margin: 0; font-family: 'Orbitron', sans-serif; font-size: 1rem; color: #fff; }
+        .sub { font-size: 0.65rem; opacity: 0.75; margin-top: 2px; margin-bottom: 12px; }
+        .row { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(0,255,136,0.15); padding: 8px 0; font-size: 0.78rem; }
+        .label { opacity: 0.65; font-size: 0.62rem; text-transform: uppercase; }
+        #cctv-frame { margin-top: 12px; width: 100%; height: 190px; border: 1px solid rgba(0,255,136,0.4); background: #000; }
     </style>
 </head>
 <body>
-
-<div id="hud-top">
-    <div class="glitch-input-wrap">
-        <input type="text" id="target-query" placeholder="SCAN VECTOR (CITY/AIRPORT)...">
-        <button class="btn-scan" onclick="executeScan()">SCAN</button>
-    </div>
-    <div style="font-size:0.6rem; margin-top:8px; opacity:0.6;">SYSTEM: ACTIVE // ENCRYPTION: VERIFIED</div>
+<div id="hud">
+    <div class="badge">Earth • Flight Route • Weather • CCTV</div>
 </div>
 
-<div id="threat-level">
-    <div style="font-size: 0.6rem; opacity: 0.6;">GLOBAL AIR DENSITY</div>
-    <div id="density-val" style="font-family: 'Orbitron'; font-size: 1.2rem; color: var(--hazard);">CALCULATING...</div>
+<div id="density">
+    <div style="font-size:0.6rem;opacity:0.6;">GLOBAL AIR DENSITY</div>
+    <div id="density-val" style="font-family:Orbitron,sans-serif;font-size:1.1rem;color:var(--hazard);">CALCULATING...</div>
+</div>
+
+<div id="intel">
+    <h2 id="flight-id">NO FLIGHT SELECTED</h2>
+    <div id="route-line" class="sub">Click a flight marker on Earth.</div>
+    <div id="weather-box">
+        <div class="row"><span class="label">Weather</span><span>Waiting...</span></div>
+    </div>
+    <div class="label" style="margin-top:12px;">CCTV</div>
+    <iframe id="cctv-frame" title="CCTV feed" allowfullscreen></iframe>
 </div>
 
 <div id="canvas-container"></div>
 
-<div id="sidebar">
-    <div id="mini-map"></div>
-    <div class="panel-data">
-        <h1 id="target-id" style="font-family:'Orbitron'; font-size:1.8rem; margin:0; color:#fff;">NO SIGNAL</h1>
-        <div id="target-status" style="color:var(--accent); font-size:0.7rem; margin-bottom:20px;">AWAITING SELECTION...</div>
-        
-        <div id="telemetry-output"></div>
-        
-        <div class="weather-card" id="wx-output">
-            <div style="text-align: center; opacity: 0.5; font-size: 0.7rem;">SELECT TARGET FOR METAR DATA</div>
-        </div>
-    </div>
-    <button class="close-btn" onclick="closeSidebar()">DISMISS DATA</button>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-
 <script>
-/**
- * BOLT COMMAND v10.0 - FINAL STABLE
- */
 const API_KEYS = {
     WX: 'c8e533a251c7a66fcf3c3030c8514440',
     AV: 'fe864d692dcc6423910c62c1b61dbed1'
@@ -100,12 +73,13 @@ const API_KEYS = {
 
 const APP = {
     scene: new THREE.Scene(),
-    camera: new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000),
-    renderer: new THREE.WebGLRenderer({antialias:true, powerPreference:"high-performance"}),
+    camera: new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1200),
+    renderer: new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }),
     world: new THREE.Group(),
     aircraft: null,
     acData: [],
-    map: null
+    routeLine: null,
+    geocodeCache: new Map()
 };
 
 function init() {
@@ -115,134 +89,171 @@ function init() {
     APP.camera.position.z = 7;
     APP.scene.add(APP.world);
 
-    // Starfield
-    const starGeo = new THREE.BufferGeometry();
-    const starPos = [];
-    for(let i=0; i<3000; i++) starPos.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
-    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
-    APP.scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x444444, size: 0.5})));
+    const stars = new THREE.BufferGeometry();
+    const pos = [];
+    for (let i = 0; i < 2500; i++) pos.push((Math.random()-0.5)*1000, (Math.random()-0.5)*1000, (Math.random()-0.5)*1000);
+    stars.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    APP.scene.add(new THREE.Points(stars, new THREE.PointsMaterial({ color: 0x335544, size: 0.5 })));
 
-    // Tactical Globe
-    const globe = new THREE.Mesh(
-        new THREE.SphereGeometry(2, 64, 64),
-        new THREE.MeshStandardMaterial({
-            map: new THREE.TextureLoader().load('https://unpkg.com/three@0.128.0/examples/textures/land_ocean_ice_cloud_2048.jpg'),
-            roughness: 0.7, metalness: 0.3
-        })
+    const globeMat = new THREE.MeshStandardMaterial({ color: 0x214d7e, roughness: 0.7, metalness: 0.25 });
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(2, 64, 64), globeMat);
+    new THREE.TextureLoader().load(
+        'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+        (texture) => { globeMat.map = texture; globeMat.needsUpdate = true; },
+        undefined,
+        () => console.warn('Earth texture unavailable, fallback active.')
     );
     APP.world.add(globe);
 
-    // Glow
     const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(2.1, 64, 64),
-        new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.05, side: THREE.BackSide })
+        new THREE.SphereGeometry(2.08, 64, 64),
+        new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.06, side: THREE.BackSide })
     );
     APP.world.add(glow);
 
-    APP.scene.add(new THREE.AmbientLight(0x333333));
-    const sun = new THREE.PointLight(0xffffff, 1.2, 100);
+    APP.scene.add(new THREE.AmbientLight(0x444444));
+    const sun = new THREE.PointLight(0xffffff, 1.15, 100);
     sun.position.set(10, 10, 10);
     APP.scene.add(sun);
 
-    // Mini-Map
-    APP.map = L.map('mini-map', {zoomControl:false, attributionControl:false}).setView([0,0], 2);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(APP.map);
-
+    window.addEventListener('resize', onResize);
     window.addEventListener('click', onPick);
     fetchLiveFlights();
+    setInterval(fetchLiveFlights, 60000);
     animate();
+}
+
+function onResize() {
+    APP.camera.aspect = window.innerWidth / window.innerHeight;
+    APP.camera.updateProjectionMatrix();
+    APP.renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 async function fetchLiveFlights() {
     try {
-        const res = await fetch(`https://api.aviationstack.com/v1/flights?access_key=${API_KEYS.AV}&limit=100`);
+        const res = await fetch(`https://api.aviationstack.com/v1/flights?access_key=${API_KEYS.AV}&limit=120`);
         const json = await res.json();
-        const data = json.data.filter(f => f.live && f.live.latitude);
-
+        const rows = Array.isArray(json.data) ? json.data : [];
+        const data = rows.filter((f) => f.live && Number.isFinite(f.live.latitude) && Number.isFinite(f.live.longitude));
         document.getElementById('density-val').innerText = `${data.length} ACTIVE UNITS`;
 
-        if(APP.aircraft) APP.world.remove(APP.aircraft);
-        
+        if (APP.aircraft) APP.world.remove(APP.aircraft);
+        APP.acData = [];
+
         const geo = new THREE.ConeGeometry(0.02, 0.06, 3);
-        const mat = new THREE.MeshBasicMaterial({color: 0x00ff88});
+        const mat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
         APP.aircraft = new THREE.InstancedMesh(geo, mat, data.length);
-        
+
         data.forEach((f, i) => {
             const dummy = new THREE.Object3D();
-            dummy.position.copy(toV3(f.live.latitude, f.live.longitude, 2.05));
-            dummy.lookAt(0,0,0);
-            dummy.rotateX(Math.PI/2);
+            dummy.position.copy(toV3(f.live.latitude, f.live.longitude, 2.04));
+            dummy.lookAt(0, 0, 0);
+            dummy.rotateX(Math.PI / 2);
             dummy.updateMatrix();
             APP.aircraft.setMatrixAt(i, dummy.matrix);
             APP.acData[i] = f;
         });
+
         APP.world.add(APP.aircraft);
-    } catch(e) { console.error("LINK LOSS"); }
+    } catch (e) {
+        document.getElementById('density-val').innerText = 'DATA LINK LOST';
+        console.error('LINK LOSS', e);
+    }
 }
 
 function toV3(lat, lon, r) {
-    const phi = (90 - lat) * (Math.PI / 180);
-    const theta = (lon + 180) * (Math.PI / 180);
+    const phi = (90 - lat) * Math.PI / 180;
+    const theta = (lon + 180) * Math.PI / 180;
     return new THREE.Vector3(-r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+}
+
+async function geocodeLocation(query) {
+    if (!query) return null;
+    const key = query.toLowerCase();
+    if (APP.geocodeCache.has(key)) return APP.geocodeCache.get(key);
+
+    try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+        const d = await r.json();
+        if (!Array.isArray(d) || !d[0]) return null;
+        const p = { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+        APP.geocodeCache.set(key, p);
+        return p;
+    } catch {
+        return null;
+    }
+}
+
+function drawRoute(lat1, lon1, lat2, lon2) {
+    if (APP.routeLine) APP.world.remove(APP.routeLine);
+
+    const start = toV3(lat1, lon1, 2.02);
+    const end = toV3(lat2, lon2, 2.02);
+    const mid = start.clone().add(end).multiplyScalar(0.5).normalize().multiplyScalar(2.55);
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const points = curve.getPoints(80);
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 0xff6b6b });
+
+    APP.routeLine = new THREE.Line(geometry, material);
+    APP.world.add(APP.routeLine);
 }
 
 async function fetchWeather(lat, lon) {
     try {
         const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEYS.WX}&units=metric`);
         const d = await res.json();
-        document.getElementById('wx-output').innerHTML = `
-            <div class="t-label">LOCAL METAR (WEATHER)</div>
-            <div class="t-row"><span>TEMP</span><span>${d.main.temp}°C</span></div>
-            <div class="t-row"><span>WIND</span><span>${d.wind.speed} m/s</span></div>
-            <div style="font-size:0.6rem; color:var(--accent); margin-top:10px;">CONDITIONS: ${d.weather[0].description.toUpperCase()}</div>
+        if (!d.main || !d.wind || !Array.isArray(d.weather) || !d.weather[0]) throw new Error('Bad weather payload');
+        document.getElementById('weather-box').innerHTML = `
+            <div class="row"><span class="label">Temp</span><span>${d.main.temp}°C</span></div>
+            <div class="row"><span class="label">Wind</span><span>${d.wind.speed} m/s</span></div>
+            <div class="row"><span class="label">Conditions</span><span>${d.weather[0].description.toUpperCase()}</span></div>
         `;
-    } catch(e) {}
+    } catch {
+        document.getElementById('weather-box').innerHTML = `<div class="row"><span class="label">Weather</span><span>Unavailable</span></div>`;
+    }
+}
+
+async function openFlightIntel(f) {
+    const id = f.flight?.iata || f.flight?.icao || `FL-${f.flight?.number || 'UNKNOWN'}`;
+    const dep = f.departure?.airport || f.departure?.iata || 'Unknown Departure';
+    const arr = f.arrival?.airport || f.arrival?.iata || 'Unknown Arrival';
+
+    document.getElementById('flight-id').innerText = id;
+    document.getElementById('route-line').innerText = `${dep} → ${arr}`;
+
+    await fetchWeather(f.live.latitude, f.live.longitude);
+
+    const depPoint = await geocodeLocation(dep);
+    const arrPoint = await geocodeLocation(arr);
+
+    if (depPoint && arrPoint) {
+        drawRoute(depPoint.lat, depPoint.lon, arrPoint.lat, arrPoint.lon);
+    } else {
+        const fallbackLat = Math.max(-80, Math.min(80, f.live.latitude + 8));
+        const fallbackLon = f.live.longitude + 12;
+        drawRoute(f.live.latitude, f.live.longitude, fallbackLat, fallbackLon);
+    }
+
+    APP.world.rotation.y = (-f.live.longitude * Math.PI / 180);
+    APP.world.rotation.x = (f.live.latitude * Math.PI / 180);
+
+    const cctvQuery = `${arr} live airport camera`;
+    document.getElementById('cctv-frame').src = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(cctvQuery)}`;
 }
 
 function onPick(e) {
-    const m = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+    if (!APP.aircraft) return;
+    const m = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
     const rc = new THREE.Raycaster();
     rc.setFromCamera(m, APP.camera);
-    
     const hits = rc.intersectObject(APP.aircraft);
-    if(hits.length > 0) {
-        const f = APP.acData[hits[0].instanceId];
-        openSidebar(f);
-        fetchWeather(f.live.latitude, f.live.longitude);
-    }
+    if (hits.length > 0) openFlightIntel(APP.acData[hits[0].instanceId]);
 }
 
-function openSidebar(f) {
-    document.getElementById('sidebar').classList.add('active');
-    document.getElementById('target-id').innerText = f.flight.iata || "ICAO-"+f.flight.number;
-    document.getElementById('target-status').innerText = "TRACKING: EN-ROUTE (" + f.flight_status.toUpperCase() + ")";
-    APP.map.setView([f.live.latitude, f.live.longitude], 8);
-    document.getElementById('telemetry-output').innerHTML = `
-        <div class="t-row"><span class="t-label">CARRIER</span><span>${f.airline.name}</span></div>
-        <div class="t-row"><span class="t-label">ALTITUDE</span><span>${Math.round(f.live.altitude)}M</span></div>
-        <div class="t-row"><span class="t-label">HEADING</span><span>${f.live.direction}°</span></div>
-    `;
-}
-
-async function executeScan() {
-    const q = document.getElementById('target-query').value;
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}`);
-    const d = await res.json();
-    if(d[0]) {
-        const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon);
-        new TWEEN.Tween(APP.world.rotation).to({
-            x: (lat * Math.PI / 180), y: (-lon * Math.PI / 180)
-        }, 2000).easing(TWEEN.Easing.Exponential.Out).start();
-        fetchWeather(lat, lon);
-    }
-}
-
-function closeSidebar() { document.getElementById('sidebar').classList.remove('active'); }
-
-function animate(t) {
+function animate() {
     requestAnimationFrame(animate);
-    TWEEN.update(t);
-    if(!TWEEN.isRunning) APP.world.rotation.y += 0.0007;
+    APP.world.rotation.y += 0.0006;
     APP.renderer.render(APP.scene, APP.camera);
 }
 
