@@ -108,6 +108,8 @@ const APP = {
     map: null
 };
 
+const FALLBACK_GLOBE_COLOR = 0x1e4d7a;
+
 function init() {
     APP.renderer.setSize(window.innerWidth, window.innerHeight);
     APP.renderer.setPixelRatio(window.devicePixelRatio);
@@ -123,12 +125,22 @@ function init() {
     APP.scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0x444444, size: 0.5})));
 
     // Tactical Globe
-    const globe = new THREE.Mesh(
-        new THREE.SphereGeometry(2, 64, 64),
-        new THREE.MeshStandardMaterial({
-            map: new THREE.TextureLoader().load('https://unpkg.com/three@0.128.0/examples/textures/land_ocean_ice_cloud_2048.jpg'),
-            roughness: 0.7, metalness: 0.3
-        })
+    const globeMat = new THREE.MeshStandardMaterial({
+        color: FALLBACK_GLOBE_COLOR,
+        roughness: 0.7,
+        metalness: 0.3
+    });
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(2, 64, 64), globeMat);
+    new THREE.TextureLoader().load(
+        'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+        (texture) => {
+            globeMat.map = texture;
+            globeMat.needsUpdate = true;
+        },
+        undefined,
+        () => {
+            console.warn('GLOBE TEXTURE OFFLINE - USING FALLBACK MATERIAL');
+        }
     );
     APP.world.add(globe);
 
@@ -157,7 +169,8 @@ async function fetchLiveFlights() {
     try {
         const res = await fetch(`https://api.aviationstack.com/v1/flights?access_key=${API_KEYS.AV}&limit=100`);
         const json = await res.json();
-        const data = json.data.filter(f => f.live && f.live.latitude);
+        const rows = Array.isArray(json.data) ? json.data : [];
+        const data = rows.filter(f => f.live && Number.isFinite(f.live.latitude) && Number.isFinite(f.live.longitude));
 
         document.getElementById('density-val').innerText = `${data.length} ACTIVE UNITS`;
 
@@ -177,7 +190,10 @@ async function fetchLiveFlights() {
             APP.acData[i] = f;
         });
         APP.world.add(APP.aircraft);
-    } catch(e) { console.error("LINK LOSS"); }
+    } catch(e) {
+        document.getElementById('density-val').innerText = 'DATA LINK LOST';
+        console.error('LINK LOSS', e);
+    }
 }
 
 function toV3(lat, lon, r) {
@@ -190,13 +206,16 @@ async function fetchWeather(lat, lon) {
     try {
         const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEYS.WX}&units=metric`);
         const d = await res.json();
+        if(!d.main || !d.wind || !Array.isArray(d.weather) || !d.weather[0]) throw new Error('Weather data unavailable');
         document.getElementById('wx-output').innerHTML = `
             <div class="t-label">LOCAL METAR (WEATHER)</div>
             <div class="t-row"><span>TEMP</span><span>${d.main.temp}°C</span></div>
             <div class="t-row"><span>WIND</span><span>${d.wind.speed} m/s</span></div>
             <div style="font-size:0.6rem; color:var(--accent); margin-top:10px;">CONDITIONS: ${d.weather[0].description.toUpperCase()}</div>
         `;
-    } catch(e) {}
+    } catch(e) {
+        document.getElementById('wx-output').innerHTML = `<div style="text-align:center; color:var(--hazard); font-size:0.7rem;">METAR FEED UNAVAILABLE</div>`;
+    }
 }
 
 function onPick(e) {
@@ -242,7 +261,7 @@ function closeSidebar() { document.getElementById('sidebar').classList.remove('a
 function animate(t) {
     requestAnimationFrame(animate);
     TWEEN.update(t);
-    if(!TWEEN.isRunning) APP.world.rotation.y += 0.0007;
+    if(TWEEN.getAll().length === 0) APP.world.rotation.y += 0.0007;
     APP.renderer.render(APP.scene, APP.camera);
 }
 
