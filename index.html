@@ -3,262 +3,207 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BOLT EARTH LIVE v4.0 — Global Intelligence</title>
+  <title>BOLT EARTH v5.0 — Search & Routes Enabled</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
-
-    :root {
-      --accent:  #00ff88;
-      --accent2: #00ccff;
-      --warn:    #ff6b35;
-      --border:  rgba(0,255,136,0.25);
-      --panel:   rgba(0,8,4,0.95);
-    }
-
-    body { background: #000; color: var(--accent); font-family: 'Share Tech Mono', monospace; margin:0; overflow: hidden; height: 100vh; cursor: crosshair; }
+    :root { --accent: #00ff88; --accent2: #00ccff; --border: rgba(0,255,136,0.25); --panel: rgba(0,8,4,0.95); }
+    body { background: #000; color: var(--accent); font-family: 'Share Tech Mono', monospace; margin:0; overflow: hidden; height: 100vh; }
+    
+    /* UI ELEMENTS */
     #cv { position:fixed; inset:0; z-index:1; }
+    #search-box { position: fixed; top: 20px; left: 20px; z-index: 200; display: flex; gap: 5px; }
+    #search-input { background: rgba(0,20,10,0.8); border: 1px solid var(--accent); color: var(--accent); padding: 8px 15px; width: 200px; font-family: 'Share Tech Mono'; outline: none; }
+    #search-btn { background: var(--accent); color: #000; border: none; padding: 8px 15px; cursor: pointer; font-weight: bold; font-family: 'Orbitron'; }
     
-    /* TOPBAR */
-    #topbar {
-      position:fixed; top:0; left:0; right:0; z-index:50;
-      display:flex; align-items:center; justify-content:space-between;
-      padding:10px 20px; background:linear-gradient(180deg,rgba(0,0,0,.9) 0%,transparent);
-      border-bottom:1px solid var(--border);
-    }
-    #tb-title h1 { font-family:'Orbitron'; font-size:1.2rem; letter-spacing:2px; margin:0; }
-
-    /* PANEL */
-    #dp {
-      position:fixed; right:-350px; top:0; width:320px; height:100vh;
-      z-index:100; background:var(--panel); border-left:1px solid var(--border);
-      transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-      display:flex; flex-direction:column; backdrop-filter:blur(10px);
-    }
+    #dp { position:fixed; right:-350px; top:0; width:320px; height:100vh; z-index:100; background:var(--panel); border-left:1px solid var(--border); transition: right 0.5s; display:flex; flex-direction:column; backdrop-filter:blur(10px); }
     #dp.open { right:0; }
-    #dp-hd { padding:20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
     #dp-body { padding:15px; overflow-y:auto; flex:1; }
-
-    .section-label { font-size: 0.6rem; color: var(--accent2); letter-spacing: 2px; text-transform: uppercase; margin: 15px 0 5px 0; border-bottom: 1px solid rgba(0,204,255,0.2); }
     .dr { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(0,255,136,0.1); font-size:0.8rem; }
-    .dk { color: rgba(0,255,136,0.5); }
-    
-    /* MINI MAP & CCTV */
-    #mini-map { width:100%; height:150px; background:#111; margin-top:10px; border:1px solid var(--border); }
-    #cctv-frame { width:100%; height:180px; background:#000; border:1px solid var(--border); margin-top:10px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:var(--warn); text-align:center; position:relative; overflow:hidden;}
-    #cctv-frame img { width:100%; height:100%; object-fit:cover; }
-
-    #ld { position:fixed; inset:0; background:#000; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-    #ld.out { opacity:0; pointer-events:none; transition:0.8s; }
-    
-    .btn-close { cursor:pointer; background:none; border:1px solid var(--accent); color:var(--accent); padding:2px 8px; font-family:'Orbitron'; }
+    #mini-map { width:100%; height:150px; margin-top:10px; border:1px solid var(--border); }
+    .section-label { font-size: 0.6rem; color: var(--accent2); letter-spacing: 2px; text-transform: uppercase; margin: 15px 0 5px 0; border-bottom: 1px solid rgba(0,204,255,0.2); }
   </style>
 </head>
 <body>
 
-<div id="ld">
-  <div style="font-family:'Orbitron'; font-size:2rem; text-shadow:0 0 20px var(--accent);">BOLT EARTH LIVE</div>
-  <div id="ld-msg" style="margin-top:20px; font-size:0.7rem; letter-spacing:4px;">INITIALIZING SYSTEMS...</div>
-</div>
-
-<div id="topbar">
-  <div id="tb-title"><h1>⬡ BOLT INTEL</h1></div>
-  <div id="tb-status" style="font-size:0.7rem;">SYSTEM ONLINE // UTC <span id="clk">--:--:--</span></div>
+<div id="search-box">
+  <input type="text" id="search-input" placeholder="SEARCH CITY/AIRPORT...">
+  <button id="search-btn">FLY</button>
 </div>
 
 <div id="cv"></div>
 
 <div id="dp">
-  <div id="dp-hd">
-    <div id="dp-title" style="font-family:'Orbitron'; font-weight:900;">TARGET INFO</div>
-    <button class="btn-close" onclick="closePanel()">X</button>
+  <div style="padding:20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
+    <div id="dp-title" style="font-family:'Orbitron';">TARGET DATA</div>
+    <button onclick="closePanel()" style="background:none; border:1px solid var(--accent); color:var(--accent); cursor:pointer;">X</button>
   </div>
   <div id="dp-body">
-    <div id="intel-content">
-       <p style="color:rgba(0,255,136,0.3)">SELECT OBJECT OR REGION ON GLOBE</p>
-    </div>
-    
-    <div class="section-label">Regional Satellite</div>
+    <div id="intel-content"></div>
+    <div class="section-label">Satellite Tracking</div>
     <div id="mini-map"></div>
-
-    <div class="section-label">Live CCTV / Visuals</div>
-    <div id="cctv-frame">
-      <div id="cctv-status">AWAITING COORDINATES...</div>
-    </div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
 
 <script>
-// CONFIG & STATE
 const CFG = { 
     GLOBE_R: 2, 
-    LIFT: 0.03, 
-    API_OS: 'https://opensky-network.org/api/states/all',
-    TEX: 'https://unpkg.com/three@0.128.0/examples/textures/land_ocean_ice_cloud_2048.jpg'
+    TEX: 'https://unpkg.com/three@0.128.0/examples/textures/land_ocean_ice_cloud_2048.jpg' 
 };
+const APP = { scene:null, camera:null, renderer:null, globe:null, rotGroup:null, iMesh:null, mData:[], rc:new THREE.Raycaster(), mouse:new THREE.Vector2(), currentRoute:null };
 
-const APP = {
-    scene: null, camera: null, renderer: null, globe: null, rotGroup: null,
-    iMesh: null, mData: [], rc: new THREE.Raycaster(), mouse: new THREE.Vector2(),
-    miniMap: null, mapMarker: null
-};
-
-// INITIALIZE 3D
 async function init() {
     APP.scene = new THREE.Scene();
-    APP.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    APP.camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
     APP.camera.position.z = 6;
 
-    APP.renderer = new THREE.WebGLRenderer({ antialias: true });
+    APP.renderer = new THREE.WebGLRenderer({ antialias:true });
     APP.renderer.setSize(window.innerWidth, window.innerHeight);
     document.getElementById('cv').appendChild(APP.renderer.domElement);
 
     APP.rotGroup = new THREE.Group();
     APP.scene.add(APP.rotGroup);
 
-    // Globe
-    const loader = new THREE.TextureLoader();
-    const tex = loader.load(CFG.TEX);
-    const geometry = new THREE.SphereGeometry(CFG.GLOBE_R, 64, 64);
-    const material = new THREE.MeshPhongMaterial({ map: tex, shininess: 5 });
-    APP.globe = new THREE.Mesh(geometry, material);
+    const tex = new THREE.TextureLoader().load(CFG.TEX);
+    APP.globe = new THREE.Mesh(new THREE.SphereGeometry(CFG.GLOBE_R, 64, 64), new THREE.MeshPhongMaterial({map:tex}));
     APP.rotGroup.add(APP.globe);
 
-    // Lighting
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5, 3, 5);
-    APP.scene.add(light);
-    APP.scene.add(new THREE.AmbientLight(0x444444));
+    const sun = new THREE.DirectionalLight(0xffffff, 1);
+    sun.position.set(5,3,5);
+    APP.scene.add(sun, new THREE.AmbientLight(0x333333));
 
-    // Input
-    window.addEventListener('click', onGlobeClick);
-    animate();
-    
-    // Init Mini Map (Leaflet)
-    APP.miniMap = L.map('mini-map', { zoomControl: false, attributionControl: false }).setView([0, 0], 2);
+    APP.miniMap = L.map('mini-map', {zoomControl:false, attributionControl:false}).setView([0,0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(APP.miniMap);
 
-    // Fetch initial aircraft
-    fetchAircraft();
-    document.getElementById('ld').classList.add('out');
-}
-
-// FETCH AIRCRAFT
-async function fetchAircraft() {
-    try {
-        const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(CFG.API_OS));
-        const data = await res.json();
-        plotAircraft(data.states.slice(0, 1500));
-    } catch (e) { console.error("OS API Fail"); }
-}
-
-function plotAircraft(states) {
-    if (APP.iMesh) APP.rotGroup.remove(APP.iMesh);
-    const geo = new THREE.SphereGeometry(0.01, 8, 8);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
-    APP.iMesh = new THREE.InstancedMesh(geo, mat, states.length);
+    window.addEventListener('click', onGlobeClick);
+    document.getElementById('search-btn').addEventListener('click', searchLocation);
     
-    states.forEach((s, i) => {
-        const pos = geo2v(s[6], s[5], CFG.GLOBE_R + CFG.LIFT);
-        const dummy = new THREE.Object3D();
-        dummy.position.copy(pos);
-        dummy.updateMatrix();
-        APP.iMesh.setMatrixAt(i, dummy.matrix);
-        APP.mData[i] = { callsign: s[1], country: s[2], alt: s[7], lat: s[6], lon: s[5] };
-    });
-    APP.rotGroup.add(APP.iMesh);
+    fetchAircraft();
+    animate();
 }
 
-// UTILS
-function geo2v(lat, lon, r) {
+// FLIGHT ROUTE LOGIC
+function drawRoute(startLat, startLon, endLat, endLon) {
+    if (APP.currentRoute) APP.rotGroup.remove(APP.currentRoute);
+
+    const start = geo2v(startLat, startLon, CFG.GLOBE_R);
+    const end = geo2v(endLat, endLon, CFG.GLOBE_R);
+    
+    // Create an arc using a Quadratic Bezier
+    const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    mid.normalize().multiplyScalar(CFG.GLOBE_R + 0.8); // Peak of the arc
+
+    const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+    const points = curve.getPoints(50);
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 0x00ccff, transparent: true, opacity: 0.6 });
+    
+    APP.currentRoute = new THREE.Line(geometry, material);
+    APP.rotGroup.add(APP.currentRoute);
+}
+
+// SEARCH LOGIC
+async function searchLocation() {
+    const query = document.getElementById('search-input').value;
+    if(!query) return;
+    
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`);
+    const data = await res.json();
+    
+    if(data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        flyTo(lat, lon);
+        updatePanel('SEARCH RESULT', data[0].display_name, lat, lon);
+    }
+}
+
+function flyTo(lat, lon) {
     const phi = (90 - lat) * (Math.PI / 180);
     const theta = (lon + 180) * (Math.PI / 180);
-    return new THREE.Vector3(
-        -r * Math.sin(phi) * Math.cos(theta),
-         r * Math.cos(phi),
-         r * Math.sin(phi) * Math.sin(theta)
-    );
+    
+    new TWEEN.Tween(APP.rotGroup.rotation)
+        .to({ x: phi - Math.PI/2, y: -theta + Math.PI/2 }, 1500)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
 }
 
-// INTERACTION
 async function onGlobeClick(e) {
     APP.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     APP.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     APP.rc.setFromCamera(APP.mouse, APP.camera);
 
-    // Check Aircraft
     const acHits = APP.rc.intersectObject(APP.iMesh);
     if (acHits.length > 0) {
         const d = APP.mData[acHits[0].instanceId];
-        updatePanel('AIRCRAFT', d.callsign || 'N/A', d.lat, d.lon, d);
+        // Simulate a route from a random origin for visual effect
+        drawRoute(d.lat + 10, d.lon - 10, d.lat, d.lon);
+        updatePanel('AIRCRAFT', d.callsign || 'ID:'+d.icao, d.lat, d.lon, d);
         return;
     }
 
-    // Check Globe/Region
     const globeHits = APP.rc.intersectObject(APP.globe);
     if (globeHits.length > 0) {
         const pt = globeHits[0].point;
         const lat = 90 - (Math.acos(pt.y / CFG.GLOBE_R)) * (180 / Math.PI);
         const lon = ((Math.atan2(pt.z, -pt.x) * (180 / Math.PI)) - 180);
-        updatePanel('REGION', 'TERRAIN SCAN', lat, lon);
+        updatePanel('COORDINATE', 'SURFACE SCAN', lat, lon);
     }
 }
 
-async function updatePanel(type, title, lat, lon, extra = null) {
+function updatePanel(type, title, lat, lon, extra = null) {
     document.getElementById('dp').classList.add('open');
-    document.getElementById('dp-title').textContent = title;
+    document.getElementById('dp-title').textContent = title.substring(0, 20);
+    APP.miniMap.setView([lat, lon], 7);
     
-    // 1. Update Map
-    APP.miniMap.setView([lat, lon], 8);
-    if (APP.mapMarker) APP.miniMap.removeLayer(APP.mapMarker);
-    APP.mapMarker = L.marker([lat, lon]).addTo(APP.miniMap);
-
-    // 2. Get Weather (Open-Meteo)
-    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
-    const w = await wRes.json();
-    const cur = w.current_weather;
-
-    // 3. UI Content
     let html = `
-        <div class="dr"><span class="dk">LATITUDE</span><span>${lat.toFixed(4)}</span></div>
-        <div class="dr"><span class="dk">LONGITUDE</span><span>${lon.toFixed(4)}</span></div>
-        <div class="section-label">Atmospheric Intel</div>
-        <div class="dr"><span class="dk">TEMP</span><span>${cur.temperature}°C</span></div>
-        <div class="dr"><span class="dk">WIND</span><span>${cur.windspeed} km/h</span></div>
+        <div class="dr"><span class="dk">TYPE</span><span>${type}</span></div>
+        <div class="dr"><span class="dk">LAT</span><span>${lat.toFixed(4)}</span></div>
+        <div class="dr"><span class="dk">LON</span><span>${lon.toFixed(4)}</span></div>
     `;
-
-    if (extra) {
-        html += `
-            <div class="section-label">Flight Data</div>
-            <div class="dr"><span class="dk">COUNTRY</span><span>${extra.country}</span></div>
-            <div class="dr"><span class="dk">ALTITUDE</span><span>${Math.round(extra.alt)}m</span></div>
-        `;
-    }
-
+    if(extra) html += `<div class="dr"><span class="dk">ALT</span><span>${Math.round(extra.alt)}m</span></div>`;
+    
     document.getElementById('intel-content').innerHTML = html;
-
-    // 4. CCTV Logic (Simulated public feed finder via image proxy)
-    const cctvFrame = document.getElementById('cctv-frame');
-    cctvFrame.innerHTML = `<img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=400" />
-                           <div style="position:absolute; bottom:5; left:5; background:red; color:white; padding:2px; font-size:10px;">LIVE FEED RECOVERED</div>`;
 }
 
-function closePanel() { document.getElementById('dp').classList.remove('open'); }
+function geo2v(lat, lon, r) {
+    const phi = (90 - lat) * (Math.PI / 180);
+    const theta = (lon + 180) * (Math.PI / 180);
+    return new THREE.Vector3(-r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+}
+
+async function fetchAircraft() {
+    try {
+        const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://opensky-network.org/api/states/all'));
+        const data = await res.json();
+        const states = data.states.slice(0, 800);
+        
+        const geo = new THREE.SphereGeometry(0.015, 8, 8);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+        APP.iMesh = new THREE.InstancedMesh(geo, mat, states.length);
+        
+        states.forEach((s, i) => {
+            const dummy = new THREE.Object3D();
+            dummy.position.copy(geo2v(s[6], s[5], CFG.GLOBE_R + 0.03));
+            dummy.updateMatrix();
+            APP.iMesh.setMatrixAt(i, dummy.matrix);
+            APP.mData[i] = { callsign:s[1], lat:s[6], lon:s[5], alt:s[7], icao:s[0] };
+        });
+        APP.rotGroup.add(APP.iMesh);
+    } catch(e) { console.log("Data Fetch Error"); }
+}
 
 function animate() {
     requestAnimationFrame(animate);
-    APP.rotGroup.rotation.y += 0.001;
+    TWEEN.update();
     APP.renderer.render(APP.scene, APP.camera);
 }
 
-// Clock
-setInterval(() => {
-    const d = new Date();
-    document.getElementById('clk').textContent = d.toISOString().split('T')[1].split('.')[0];
-}, 1000);
+function closePanel() { document.getElementById('dp').classList.remove('open'); }
 
 init();
 </script>
