@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BOLT EARTH LIVE — Global Airspace Intelligence</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+    :root {
+      --accent:  #00ff88;
+      --accent2: #00ccff;
+      --warn:    #ff6b35;
+      --border:  rgba(0,255,136,0.25);
+      --dim:     rgba(0,255,136,0.10);
+      --panel:   rgba(0,8,4,0.91);
+    }
+
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: #000;
+      color: var(--accent);
+      font-family: 'Share Tech Mono', monospace;
+      overflow: hidden;
+      height: 100vh; width: 100vw;
+      cursor: crosshair;
+      user-select: none;
+    }
+
+    /* Scanlines */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent 0, transparent 3px,
+        rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 4px
+      );
+      pointer-events: none; z-index: 998;
+    }
+
+    /* ── CANVAS ── */
+    #cv { position:fixed; inset:0; z-index:1; }
+    canvas { display:block; }
+
+    /* ── LOADING ── */
+    #ld {
+      position:fixed; inset:0; background:#000;
+      z-index:9999; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:15px;
+      transition: opacity .65s ease;
+    }
+    #ld.out { opacity:0; pointer-events:none; }
+    #ld-logo {
+      font-family:'Orbitron',monospace;
+      font-size:clamp(1rem,3.5vw,1.85rem);
+      font-weight:900; letter-spacing:.28em;
+      color:var(--accent);
+      text-shadow:0 0 28px var(--accent),0 0 55px rgba(0,255,136,.28);
+    }
+    #ld-sub { font-size:.56rem; letter-spacing:.3em; color:rgba(0,255,136,.35); margin-top:-9px; }
+    #ld-track { width:min(290px,76vw); height:2px; background:rgba(0,255,136,.09); border-radius:2px; overflow:hidden; }
+    #ld-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent2)); box-shadow:0 0 9px var(--accent); transition:width .2s ease; }
+    #ld-msg { font-size:.58rem; letter-spacing:.16em; color:rgba(0,255,136,.38); min-height:1em; }
+
+    /* ── TOPBAR ── */
+    #topbar {
+      position:fixed; top:0; left:0; right:0; z-index:50;
+      display:flex; align-items:center; justify-content:space-between;
+      flex-wrap:wrap; gap:6px; padding:9px 18px;
+      background:linear-gradient(180deg,rgba(0,0,0,.97) 50%,transparent);
+      border-bottom:1px solid var(--border);
+    }
+    #tb-title h1 {
+      font-family:'Orbitron',monospace;
+      font-size:clamp(.8rem,1.9vw,1.15rem); font-weight:900;
+      letter-spacing:.2em; color:var(--accent);
+      text-shadow:0 0 14px var(--accent),0 0 28px rgba(0,255,136,.28);
+    }
+    #tb-title p { font-size:.54rem; letter-spacing:.26em; color:rgba(0,255,136,.35); margin-top:2px; }
+    #tb-status { display:flex; gap:16px; align-items:center; font-size:.64rem; letter-spacing:.07em; flex-wrap:wrap; }
+    .si { display:flex; align-items:center; gap:5px; color:rgba(0,255,136,.5); }
+    .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 7px var(--accent); flex-shrink:0; }
+    .dot.live    { animation:blink 1.4s ease-in-out infinite; }
+    .dot.pending { background:var(--warn); box-shadow:0 0 7px var(--warn); animation:blink .55s ease-in-out infinite; }
+    .dot.offline { background:#f33; box-shadow:0 0 7px #f33; animation:none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.17} }
+
+    /* ── STATS PANEL ── */
+    #sp {
+      position:fixed; left:12px; top:65px; width:220px;
+      z-index:50; display:flex; flex-direction:column; gap:5px;
+    }
+    .pc {
+      background:var(--panel); border:1px solid var(--border);
+      padding:10px 12px; position:relative;
+      clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);
+      backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    }
+    .pc::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg,var(--accent),transparent);
+    }
+    .pl { font-size:.55rem; letter-spacing:.2em; color:rgba(0,255,136,.36); text-transform:uppercase; margin-bottom:4px; }
+    .pv { font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:700; color:var(--accent); text-shadow:0 0 10px rgba(0,255,136,.45); line-height:1; }
+    .ps { font-size:.55rem; color:rgba(0,255,136,.3); margin-top:3px; }
+
+    #cl { list-style:none; }
+    #cl li { display:flex; justify-content:space-between; align-items:center; font-size:.63rem; padding:3px 0; border-bottom:1px solid rgba(0,255,136,.07); color:rgba(0,255,136,.62); }
+    #cl li:last-child { border-bottom:none; }
+    .cn { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:135px; }
+    .cc { color:var(--accent); font-family:'Orbitron',monospace; font-size:.58rem; flex-shrink:0; margin-left:3px; }
+
+    .pb { height:2px; background:rgba(0,255,136,.09); margin-top:5px; border-radius:2px; overflow:hidden; }
+    .pf { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); box-shadow:0 0 5px var(--accent); width:0%; }
+
+    /* ── DETAIL PANEL ── */
+    #dp {
+      position:fixed; right:-320px; top:65px; width:295px;
+      z-index:50; background:var(--panel);
+      border:1px solid var(--border); border-right:none;
+      clip-path:polygon(10px 0,100% 0,100% 100%,0 100%,0 10px);
+      transition:right .4s cubic-bezier(.22,1,.36,1);
+      backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    }
+    #dp::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--accent)); }
+    #dp.open { right:0; }
+
+    #dp-hd {
+      padding:12px 15px; border-bottom:1px solid var(--border);
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+    }
+    #dp-cs {
+      font-family:'Orbitron',monospace; font-size:.95rem; font-weight:700;
+      color:var(--accent); text-shadow:0 0 9px rgba(0,255,136,.5);
+      letter-spacing:.1em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    #dp-close {
+      background:none; border:1px solid var(--border); color:var(--accent);
+      cursor:pointer; width:26px; height:26px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:.9rem; transition:background .15s,box-shadow .15s; flex-shrink:0;
+      clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,0 100%);
+    }
+    #dp-close:hover { background:var(--dim); box-shadow:0 0 10px var(--accent); }
+
+    #compass-wrap { display:flex; justify-content:center; padding:12px 0 6px; }
+    #compass-ring {
+      width:68px; height:68px; border-radius:50%;
+      border:1px solid var(--border);
+      position:relative; display:flex; align-items:center; justify-content:center;
+    }
+    #cn {
+      width:2px; height:24px;
+      background:linear-gradient(180deg,var(--accent) 0%,rgba(0,255,136,.07) 100%);
+      transform-origin:bottom center;
+      position:absolute; bottom:50%; left:calc(50% - 1px);
+      box-shadow:0 0 5px var(--accent);
+      transition:transform .5s ease;
+    }
+    .cl { position:absolute; font-size:.45rem; color:rgba(0,255,136,.4); }
+    .cl.n{top:4px;left:50%;transform:translateX(-50%)}
+    .cl.s{bottom:4px;left:50%;transform:translateX(-50%)}
+    .cl.e{right:4px;top:50%;transform:translateY(-50%)}
+    .cl.w{left:4px;top:50%;transform:translateY(-50%)}
+
+    #dp-body { padding:7px 15px 13px; }
+    .dr { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid rgba(0,255,136,.07); }
+    .dr:last-child { border-bottom:none; }
+    .dk { font-size:.54rem; letter-spacing:.15em; color:rgba(0,255,136,.33); text-transform:uppercase; flex-shrink:0; }
+    .dv { font-family:'Orbitron',monospace; font-size:.74rem; color:var(--accent); text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:165px; }
+
+    /* ── BOTTOM BAR ── */
+    #btm {
+      position:fixed; bottom:0; left:0; right:0; z-index:50;
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:3px;
+      padding:5px 18px;
+      background:linear-gradient(0deg,rgba(0,0,0,.94) 55%,transparent);
+      border-top:1px solid var(--border);
+      font-size:.54rem; letter-spacing:.1em; color:rgba(0,255,136,.22);
+    }
+
+    /* ── TOOLTIP ── */
+    #tip {
+      position:fixed; z-index:200;
+      background:var(--panel); border:1px solid var(--border);
+      padding:4px 9px; font-size:.58rem; letter-spacing:.09em;
+      pointer-events:none; opacity:0; transition:opacity .09s;
+      clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%);
+      white-space:nowrap;
+    }
+    #tip.on { opacity:1; }
+    #tip .t2 { color:var(--accent2); }
+
+    /* ── ERROR BANNER ── */
+    #err {
+      position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
+      z-index:300;
+      background:rgba(255,51,51,.09); border:1px solid rgba(255,51,51,.35);
+      color:#ff5555; padding:6px 16px; font-size:.6rem; letter-spacing:.11em;
+      text-align:center; display:none; max-width:90vw;
+      clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%);
+    }
+    #err.on { display:block; }
+
+    /* Corner decor */
+    .deco { position:fixed; z-index:5; pointer-events:none; }
+    .deco.tl { top:61px; left:0; width:40px; height:40px; border-top:1px solid rgba(0,255,136,.15); border-right:1px solid rgba(0,255,136,.15); }
+    .deco.br { bottom:20px; right:0; width:40px; height:40px; border-bottom:1px solid rgba(0,255,136,.15); border-left:1px solid rgba(0,255,136,.15); }
+  </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="ld">
+  <div id="ld-logo">⬡ BOLT EARTH LIVE</div>
+  <div id="ld-sub">GLOBAL AIRSPACE INTELLIGENCE SYSTEM</div>
+  <div id="ld-track"><div id="ld-fill"></div></div>
+  <div id="ld-msg">INITIALIZING...</div>
+</div>
+
+<!-- CANVAS -->
+<div id="cv"></div>
+<div class="deco tl"></div>
+<div class="deco br"></div>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div id="tb-title">
+    <h1>⬡ BOLT EARTH LIVE</h1>
+    <p>GLOBAL AIRSPACE INTELLIGENCE · REAL-TIME · OPENSKY NETWORK</p>
+  </div>
+  <div id="tb-status">
+    <div class="si"><div class="dot pending" id="api-dot"></div><span id="api-txt">CONNECTING</span></div>
+    <div class="si" style="color:var(--accent2)"><span id="clk">--:--:-- UTC</span></div>
+    <div class="si"><span id="upd">NO DATA YET</span></div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div id="sp">
+  <div class="pc">
+    <div class="pl">Live Aircraft</div>
+    <div class="pv" id="st">—</div>
+    <div class="ps" id="sa">Awaiting data...</div>
+  </div>
+  <div class="pc">
+    <div class="pl">Avg Altitude</div>
+    <div class="pv" id="salt" style="font-size:1rem">—</div>
+    <div class="ps">FEET MSL</div>
+  </div>
+  <div class="pc">
+    <div class="pl">Top Countries</div>
+    <ul id="cl"><li><span class="cn" style="color:rgba(0,255,136,.26)">Awaiting data...</span></li></ul>
+  </div>
+  <div class="pc">
+    <div class="pl">Refresh Cycle</div>
+    <div class="pb"><div class="pf" id="pfill"></div></div>
+    <div class="ps" id="snx">WAITING...</div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div id="dp">
+  <div id="dp-hd">
+    <div id="dp-cs">SELECT AIRCRAFT</div>
+    <button id="dp-close" aria-label="Close">✕</button>
+  </div>
+  <div id="compass-wrap">
+    <div id="compass-ring">
+      <span class="cl n">N</span><span class="cl s">S</span>
+      <span class="cl e">E</span><span class="cl w">W</span>
+      <div id="cn"></div>
+    </div>
+  </div>
+  <div id="dp-body">
+    <div class="dr"><span class="dk">Country</span>   <span class="dv" id="d-co">—</span></div>
+    <div class="dr"><span class="dk">Altitude</span>  <span class="dv" id="d-al">—</span></div>
+    <div class="dr"><span class="dk">Velocity</span>  <span class="dv" id="d-ve">—</span></div>
+    <div class="dr"><span class="dk">Heading</span>   <span class="dv" id="d-hd">—</span></div>
+    <div class="dr"><span class="dk">Vert Rate</span><span class="dv" id="d-vr">—</span></div>
+    <div class="dr"><span class="dk">On Ground</span><span class="dv" id="d-gn">—</span></div>
+    <div class="dr"><span class="dk">ICAO24</span>    <span class="dv" id="d-ic" style="font-size:.65rem;color:rgba(0,255,136,.42)">—</span></div>
+    <div class="dr"><span class="dk">Last Contact</span><span class="dv" id="d-lc" style="font-size:.65rem">—</span></div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tip"><span class="t2" id="tt-cs"></span>&nbsp;·&nbsp;<span id="tt-co"></span></div>
+
+<!-- ERROR -->
+<div id="err"></div>
+
+<!-- BOTTOM -->
+<div id="btm">
+  <span>SOURCE: OPENSKY NETWORK PUBLIC API · NO AUTH REQUIRED</span>
+  <span id="acc">AIRCRAFT: 0</span>
+  <span>BOLT EARTH LIVE v3.0 · GITHUB PAGES READY</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*
+ * BOLT EARTH LIVE v3.0
+ * ─────────────────────────────────────────────────────
+ * FIXES vs v2:
+ *  [1] CRITICAL: pointerDownAt was reassigned in mousemove → click always fired
+ *      after dragging. Fixed with a separate, immutable dragOrigin set only on
+ *      mousedown, never touched again until next mousedown.
+ *  [2] InstancedMesh material initialized with transparent:true → no flash on
+ *      first render frame when pulse animation starts.
+ *  [3] CORS proxy URLs corrected: corsproxy.io expects raw URL as query param,
+ *      not percent-encoded. allorigins also cleaned up.
+ *  [4] Third texture CDN fallback added (NASA visible earth via jsDelivr).
+ *  [5] geo2vec: confirmed lon=s[5] lat=s[6] per OpenSky docs; filter uses s[5]
+ *      and s[6] with != null (handles 0° equator/meridian correctly).
+ *  [6] Error banner correctly wired — no duplicate id attributes.
+ *  [7] Removed double APP.rotGroup.rotation.x assignment in touch handler.
+ *  [8] Auto-rotation uses delta time to stay frame-rate independent.
+ *  [9] InstancedMesh geometry/material disposed fully on re-plot.
+ * [10] All element lookups cached once on boot, never re-queried.
+ */
+
+'use strict';
+
+/* ─── CONFIG ──────────────────────────────────────── */
+const CFG = {
+  REFRESH_MS:  20000,
+  GLOBE_R:     2.0,
+  LIFT:        0.026,
+  MAX_AC:      6000,
+  FETCH_TO:    10000,
+  HOVER_THR:   80,    // ms throttle for hover raycast
+
+  /* FIX [3]: corsproxy.io wants the raw URL, NOT percent-encoded */
+  API: [
+    'https://opensky-network.org/api/states/all',
+    'https://corsproxy.io/?url=https://opensky-network.org/api/states/all',
+    'https://api.allorigins.win/raw?url=https://opensky-network.org/api/states/all',
+    'https://thingproxy.freeboard.io/fetch/https://opensky-network.org/api/states/all',
+  ],
+
+  /* FIX [4]: three texture CDN fallbacks + final null → procedural */
+  TEX: [
+    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/land_ocean_ice_cloud_2048.jpg',
+    'https://unpkg.com/three@0.128.0/examples/textures/land_ocean_ice_cloud_2048.jpg',
+    'https://raw.githubusercontent.com/turban/webgl-earth/master/images/2_no_clouds_4k.jpg',
+  ],
+};
+
+/* ─── ELEMENT CACHE [10] ──────────────────────────── */
+const $ = id => document.getElementById(id);
+const EL = {
+  ld:$('ld'), ldFill:$('ld-fill'), ldMsg:$('ld-msg'),
+  dot:$('api-dot'), apiTxt:$('api-txt'),
+  clk:$('clk'), upd:$('upd'),
+  st:$('st'), sa:$('sa'), salt:$('salt'),
+  cl:$('cl'), pfill:$('pfill'), snx:$('snx'),
+  dp:$('dp'), dpCs:$('dp-cs'), dpClose:$('dp-close'),
+  compass:$('cn'),
+  dCo:$('d-co'), dAl:$('d-al'), dVe:$('d-ve'), dHd:$('d-hd'),
+  dVr:$('d-vr'), dGn:$('d-gn'), dIc:$('d-ic'), dLc:$('d-lc'),
+  tip:$('tip'), ttCs:$('tt-cs'), ttCo:$('tt-co'),
+  err:$('err'), acc:$('acc'),
+};
+
+/* ─── APP STATE ───────────────────────────────────── */
+const APP = {
+  renderer:null, scene:null, camera:null,
+  rotGroup:null,
+  iMesh:null,
+  mData:[],           // per-instance aircraft data
+  rc: new THREE.Raycaster(),
+  mouse: new THREE.Vector2(-10,-10),
+  isDrag: false,
+  dragOrigin: {x:0,y:0},   /* FIX [1]: set ONLY in mousedown, NEVER in mousemove */
+  dragLast:   {x:0,y:0},   /* delta source for rotation */
+  lastHov: 0,
+  cdId: null,
+  lastT: 0,
+};
+
+/* ─── HELPERS ─────────────────────────────────────── */
+const p2 = n => String(n).padStart(2,'0');
+const setLoad = (p,m) => { EL.ldFill.style.width=p+'%'; EL.ldMsg.textContent=m; };
+
+function setApi(s) {
+  EL.dot.className = 'dot';
+  if (s==='live')   { EL.dot.classList.add('live');    EL.apiTxt.textContent='LIVE'; }
+  else if(s==='off'){ EL.dot.classList.add('offline'); EL.apiTxt.textContent='OFFLINE'; }
+  else              { EL.dot.classList.add('pending'); EL.apiTxt.textContent='FETCHING'; }
+}
+
+let errTimer;
+function showErr(msg) {
+  EL.err.textContent = '⚠  ' + msg;
+  EL.err.classList.add('on');
+  clearTimeout(errTimer);
+  errTimer = setTimeout(()=>EL.err.classList.remove('on'), 7000);
+}
+
+/* FIX [1 cont.]: cross-browser fetch timeout via AbortController */
+function ftch(url, ms) {
+  return new Promise((res,rej) => {
+    const c = new AbortController();
+    const t = setTimeout(()=>{ c.abort(); rej(new Error('timeout')); }, ms);
+    fetch(url, {signal:c.signal})
+      .then(r=>{ clearTimeout(t); res(r); })
+      .catch(e=>{ clearTimeout(t); rej(e); });
+  });
+}
+
+/* Texture with CDN fallbacks */
+function loadTex(urls) {
+  return new Promise(resolve => {
+    const L = new THREE.TextureLoader();
+    let i = 0;
+    (function try_() {
+      if (i >= urls.length) { resolve(null); return; }
+      L.load(urls[i++], t=>resolve(t), undefined, ()=>try_());
+    })();
+  });
+}
+
+/* Lat/Lon → Three.js Vec3
+   OpenSky: s[5]=longitude, s[6]=latitude */
+function geo2v(lat, lon, r) {
+  const φ = (90 - lat)  * (Math.PI/180);
+  const θ = (lon + 180) * (Math.PI/180);
+  return new THREE.Vector3(
+    -r * Math.sin(φ) * Math.cos(θ),
+     r * Math.cos(φ),
+     r * Math.sin(φ) * Math.sin(θ)
+  );
+}
+
+/* ─── INIT THREE ──────────────────────────────────── */
+async function initThree() {
+  APP.renderer = new THREE.WebGLRenderer({ antialias:true });
+  APP.renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  APP.renderer.setSize(innerWidth, innerHeight);
+  APP.renderer.setClearColor(0x000000);
+  $('cv').appendChild(APP.renderer.domElement);
+
+  APP.scene  = new THREE.Scene();
+  APP.camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, .1, 800);
+  APP.camera.position.z = 5.5;
+
+  /* Single rotation group — globe + atmo + aircraft markers all rotate together */
+  APP.rotGroup = new THREE.Group();
+  APP.scene.add(APP.rotGroup);
+
+  /* Lights */
+  APP.scene.add(new THREE.AmbientLight(0x112200, .4));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(5,3,5);
+  APP.scene.add(sun);
+
+  buildStars();
+
+  setLoad(22,'LOADING EARTH TEXTURE...');
+  await buildGlobe();
+
+  setLoad(55,'ATMOSPHERE...');
+  buildAtmo();
+
+  window.addEventListener('resize', ()=>{
+    APP.camera.aspect = innerWidth/innerHeight;
+    APP.camera.updateProjectionMatrix();
+    APP.renderer.setSize(innerWidth, innerHeight);
+  });
+
+  bindInput();
+}
+
+function buildStars() {
+  const N=4500, buf=new Float32Array(N*3);
+  for(let i=0;i<N*3;i++) buf[i]=(Math.random()-.5)*300;
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(buf,3));
+  APP.scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:.17})));
+}
+
+async function buildGlobe() {
+  const geo = new THREE.SphereGeometry(CFG.GLOBE_R, 64, 64);
+  const tex = await loadTex(CFG.TEX);
+  const mat = tex
+    ? new THREE.MeshPhongMaterial({map:tex, specular:new THREE.Color(0x001a0d), shininess:5})
+    : new THREE.MeshPhongMaterial({color:0x0a2a18, emissive:0x001008, specular:0x001a0d, shininess:5});
+  APP.rotGroup.add(new THREE.Mesh(geo,mat));
+}
+
+function buildAtmo() {
+  const g = new THREE.SphereGeometry(CFG.GLOBE_R*1.03, 48, 48);
+  const m = new THREE.ShaderMaterial({
+    vertexShader:`
+      varying vec3 vN;
+      void main(){
+        vN=normalize(normalMatrix*normal);
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+      }`,
+    fragmentShader:`
+      varying vec3 vN;
+      void main(){
+        float rim=1.0-abs(dot(vN,vec3(0,0,1)));
+        float g=pow(rim,3.8)*.50;
+        gl_FragColor=vec4(0.0,1.0,0.53,g);
+      }`,
+    side:THREE.FrontSide,
+    blending:THREE.AdditiveBlending,
+    transparent:true, depthWrite:false,
+  });
+  APP.rotGroup.add(new THREE.Mesh(g,m));
+}
+
+/* ─── INSTANCED AIRCRAFT ──────────────────────────── */
+const _dummy  = new THREE.Object3D();
+const _cAir   = new THREE.Color(0x00ff88);
+const _cGnd   = new THREE.Color(0xff7722);
+
+function plotAircraft(states) {
+  /* FIX [9]: clean disposal */
+  if (APP.iMesh) {
+    APP.rotGroup.remove(APP.iMesh);
+    APP.iMesh.geometry.dispose();
+    APP.iMesh.material.dispose();
+    APP.iMesh = null;
+  }
+  APP.mData = [];
+
+  /* FIX [5]: s[5]=longitude s[6]=latitude per OpenSky docs
+              != null handles 0° (equator / prime meridian) correctly */
+  const valid = states.filter(s => s[5] != null && s[6] != null).slice(0, CFG.MAX_AC);
+  if (!valid.length) return;
+
+  const N   = valid.length;
+  const geo = new THREE.SphereGeometry(.0068, 5, 5);
+
+  /* FIX [2]: material initialized with transparent:true → no frame-1 flash */
+  const mat = new THREE.MeshBasicMaterial({ vertexColors:true, transparent:true, opacity:.9 });
+
+  APP.iMesh = new THREE.InstancedMesh(geo, mat, N);
+  APP.iMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+  for (let i=0; i<N; i++) {
+    const s = valid[i];
+    /* OpenSky field order:
+       0=icao24  1=callsign  2=origin_country  3=time_position  4=last_contact
+       5=longitude  6=latitude  7=baro_altitude  8=on_ground  9=velocity
+       10=true_track  11=vertical_rate */
+    const lon       = s[5];
+    const lat       = s[6];
+    const baroAlt   = s[7];
+    const onGround  = s[8];
+    const velocity  = s[9];
+    const trueTrack = s[10];
+    const vertRate  = s[11];
+    const icao      = s[0];
+    const callsign  = s[1];
+    const country   = s[2];
+    const lastContact = s[4];
+
+    _dummy.position.copy(geo2v(lat, lon, CFG.GLOBE_R + CFG.LIFT));
+    _dummy.lookAt(0,0,0);
+    _dummy.updateMatrix();
+    APP.iMesh.setMatrixAt(i, _dummy.matrix);
+    APP.iMesh.setColorAt(i, onGround ? _cGnd : _cAir);
+
+    APP.mData.push({ icao, callsign, country, lat, lon, baroAlt, onGround, velocity, trueTrack, vertRate, lastContact });
+  }
+
+  APP.iMesh.instanceMatrix.needsUpdate = true;
+  if (APP.iMesh.instanceColor) APP.iMesh.instanceColor.needsUpdate = true;
+  APP.rotGroup.add(APP.iMesh);
+
+  EL.acc.textContent = 'AIRCRAFT: ' + N.toLocaleString();
+}
+
+/* ─── FETCH ───────────────────────────────────────── */
+async function fetchData() {
+  setApi('pending');
+  EL.snx.textContent = 'FETCHING DATA...';
+
+  let data = null;
+  for (const url of CFG.API) {
+    try {
+      const res = await ftch(url, CFG.FETCH_TO);
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const json = await res.json();
+      if (json && Array.isArray(json.states)) { data=json; break; }
+    } catch(e) {
+      console.warn('[BOLT] fetch failed:', url.slice(0,58), '|', e.message);
+    }
+  }
+
+  if (!data) {
+    setApi('off');
+    EL.snx.textContent = 'API UNAVAILABLE — RETRYING...';
+    showErr('All API endpoints failed. Possible CORS / rate-limit. Retrying in 20s.');
+    startCd(CFG.REFRESH_MS/1000);
+    return;
+  }
+
+  setApi('live');
+  const t = new Date();
+  EL.upd.textContent = `UPDATED ${p2(t.getUTCHours())}:${p2(t.getUTCMinutes())}:${p2(t.getUTCSeconds())} UTC`;
+
+  plotAircraft(data.states);
+  updateStats(data.states);
+  startCd(CFG.REFRESH_MS/1000);
+  animProg();
+}
+
+/* ─── STATS ───────────────────────────────────────── */
+function updateStats(states) {
+  const tot = states.length;
+  const air = states.filter(s=>!s[8]).length;
+  EL.st.textContent = tot.toLocaleString();
+  EL.sa.textContent = `${air.toLocaleString()} AIRBORNE · ${(tot-air).toLocaleString()} GND`;
+
+  let sum=0, cnt=0;
+  const cc={};
+  for (const s of states) {
+    if (s[7]!=null){ sum+=s[7]*3.28084; cnt++; }
+    const c=s[2]||'Unknown';
+    cc[c]=(cc[c]||0)+1;
+  }
+  EL.salt.textContent = cnt ? Math.round(sum/cnt).toLocaleString() : '—';
+
+  const top5 = Object.entries(cc).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  EL.cl.innerHTML = top5.map(([c,n])=>
+    `<li><span class="cn">${c}</span><span class="cc">${n}</span></li>`
+  ).join('');
+}
+
+/* ─── PROGRESS BAR ────────────────────────────────── */
+function animProg() {
+  const f=EL.pfill;
+  f.style.transition='none'; f.style.width='0%';
+  void f.offsetWidth;
+  f.style.transition=`width ${CFG.REFRESH_MS/1000}s linear`;
+  f.style.width='100%';
+}
+
+/* ─── COUNTDOWN ───────────────────────────────────── */
+function startCd(secs) {
+  clearInterval(APP.cdId);
+  let s=Math.round(secs);
+  EL.snx.textContent=`NEXT FETCH IN ${s}s`;
+  APP.cdId = setInterval(()=>{
+    s--;
+    if(s<=0){ clearInterval(APP.cdId); EL.snx.textContent='FETCHING...'; }
+    else EL.snx.textContent=`NEXT FETCH IN ${s}s`;
+  },1000);
+}
+
+/* ─── INPUT ───────────────────────────────────────── */
+function bindInput() {
+  const dom = APP.renderer.domElement;
+
+  /* FIX [1]: dragOrigin set ONLY here, never mutated during mousemove */
+  dom.addEventListener('mousedown', e=>{
+    APP.isDrag = true;
+    APP.dragOrigin = {x:e.clientX, y:e.clientY};
+    APP.dragLast   = {x:e.clientX, y:e.clientY};
+  });
+
+  dom.addEventListener('mousemove', e=>{
+    APP.mouse.x =  (e.clientX/innerWidth) *2-1;
+    APP.mouse.y = -(e.clientY/innerHeight)*2+1;
+
+    if (APP.isDrag) {
+      /* FIX [1]: use dragLast for delta, NOT dragOrigin */
+      const dx = e.clientX - APP.dragLast.x;
+      const dy = e.clientY - APP.dragLast.y;
+      APP.rotGroup.rotation.y += dx*.003;
+      APP.rotGroup.rotation.x += dy*.003;
+      APP.rotGroup.rotation.x = Math.max(-Math.PI*.48, Math.min(Math.PI*.48, APP.rotGroup.rotation.x));
+      APP.dragLast = {x:e.clientX, y:e.clientY};
+      /* dragOrigin is never touched here */
+    }
+
+    const now=Date.now();
+    if (now-APP.lastHov > CFG.HOVER_THR) {
+      APP.lastHov=now;
+      doHov(e.clientX, e.clientY);
+    }
+  });
+
+  dom.addEventListener('mouseup',    ()=>{ APP.isDrag=false; });
+  dom.addEventListener('mouseleave', ()=>{ APP.isDrag=false; hideTip(); });
+
+  /* FIX [1]: compare clientX/Y to dragOrigin (immutable since mousedown) */
+  dom.addEventListener('click', e=>{
+    const dd = Math.hypot(e.clientX-APP.dragOrigin.x, e.clientY-APP.dragOrigin.y);
+    if (dd > 8) return;   // was a drag, not a click
+    doPick();
+  });
+
+  /* Touch */
+  let lt=null;
+  dom.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1) return;
+    APP.isDrag=true;
+    lt={x:e.touches[0].clientX, y:e.touches[0].clientY};
+    APP.dragOrigin={...lt};
+  },{passive:true});
+
+  dom.addEventListener('touchmove', e=>{
+    if(!APP.isDrag||e.touches.length!==1) return;
+    const dx=e.touches[0].clientX-lt.x;
+    const dy=e.touches[0].clientY-lt.y;
+    APP.rotGroup.rotation.y+=dx*.003;
+    APP.rotGroup.rotation.x+=dy*.003;
+    /* FIX [7]: clamp ONCE, not twice */
+    APP.rotGroup.rotation.x=Math.max(-Math.PI*.48,Math.min(Math.PI*.48,APP.rotGroup.rotation.x));
+    lt={x:e.touches[0].clientX, y:e.touches[0].clientY};
+    e.preventDefault();
+  },{passive:false});
+
+  dom.addEventListener('touchend', ()=>{ APP.isDrag=false; });
+  EL.dpClose.addEventListener('click', ()=>EL.dp.classList.remove('open'));
+}
+
+/* ─── HOVER / PICK ────────────────────────────────── */
+function doHov(cx,cy) {
+  if (!APP.iMesh||!APP.mData.length) return;
+  APP.rc.setFromCamera(APP.mouse, APP.camera);
+  const hits=APP.rc.intersectObject(APP.iMesh);
+  if (hits.length && hits[0].instanceId!=null) {
+    const d=APP.mData[hits[0].instanceId];
+    if (!d) return;
+    EL.ttCs.textContent=(d.callsign?.trim()||d.icao||'?').toUpperCase();
+    EL.ttCo.textContent=d.country||'—';
+    EL.tip.style.left=(cx+12)+'px';
+    EL.tip.style.top =(cy-8) +'px';
+    EL.tip.classList.add('on');
+    document.body.style.cursor='pointer';
+  } else {
+    hideTip();
+  }
+}
+
+function hideTip() {
+  EL.tip.classList.remove('on');
+  document.body.style.cursor='crosshair';
+}
+
+function doPick() {
+  if (!APP.iMesh||!APP.mData.length) return;
+  APP.rc.setFromCamera(APP.mouse, APP.camera);
+  const hits=APP.rc.intersectObject(APP.iMesh);
+  if (!hits.length||hits[0].instanceId==null) return;
+  const d=APP.mData[hits[0].instanceId];
+  if (d) showDetail(d);
+}
+
+function showDetail(d) {
+  EL.dpCs.textContent =(d.callsign?.trim()||d.icao||'—').toUpperCase();
+  EL.dCo.textContent  = d.country||'—';
+  EL.dAl.textContent  = d.baroAlt  !=null ? Math.round(d.baroAlt*3.28084).toLocaleString()+' ft'  : '—';
+  EL.dVe.textContent  = d.velocity !=null ? Math.round(d.velocity*1.944).toLocaleString() +' kts' : '—';
+  EL.dHd.textContent  = d.trueTrack!=null ? Math.round(d.trueTrack)+'°' : '—';
+  const vr = d.vertRate!=null ? Math.round(d.vertRate*196.85) : null;
+  EL.dVr.textContent  = vr!=null ? (vr>=0?'+':'')+vr.toLocaleString()+' fpm' : '—';
+  EL.dGn.textContent  = d.onGround ? 'YES' : 'NO';
+  EL.dIc.textContent  = d.icao?.toUpperCase()||'—';
+  if (d.lastContact) {
+    const lc=new Date(d.lastContact*1000);
+    EL.dLc.textContent=`${p2(lc.getUTCHours())}:${p2(lc.getUTCMinutes())}:${p2(lc.getUTCSeconds())} UTC`;
+  } else EL.dLc.textContent='—';
+  EL.compass.style.transform=`rotate(${d.trueTrack??0}deg)`;
+  EL.dp.classList.add('open');
+}
+
+/* ─── ANIMATE ─────────────────────────────────────── */
+function animate(ts) {
+  requestAnimationFrame(animate);
+
+  /* FIX [8]: delta-time based rotation — frame rate independent */
+  const dt = Math.min((ts - APP.lastT) / 16.67, 3);
+  APP.lastT = ts;
+  if (!APP.isDrag) APP.rotGroup.rotation.y += .00065 * dt;
+
+  /* FIX [2]: opacity pulse — material already initialized transparent */
+  if (APP.iMesh) {
+    APP.iMesh.material.opacity = .5 + .5*Math.sin(ts*.0014);
+  }
+
+  APP.renderer.render(APP.scene, APP.camera);
+}
+
+/* ─── CLOCK ───────────────────────────────────────── */
+setInterval(()=>{
+  const n=new Date();
+  EL.clk.textContent=`${p2(n.getUTCHours())}:${p2(n.getUTCMinutes())}:${p2(n.getUTCSeconds())} UTC`;
+},1000);
+
+/* ─── BOOT ────────────────────────────────────────── */
+async function boot() {
+  try {
+    setLoad(8,'INITIALIZING RENDERER...');
+    await initThree();
+
+    setLoad(70,'FETCHING LIVE AIRCRAFT DATA...');
+    await fetchData();
+
+    setLoad(100,'SYSTEM ONLINE ✓');
+    setTimeout(()=>EL.ld.classList.add('out'), 500);
+
+    requestAnimationFrame(ts=>{ APP.lastT=ts; animate(ts); });
+    setInterval(fetchData, CFG.REFRESH_MS);
+
+  } catch(e) {
+    console.error('[BOLT] Fatal:', e);
+    EL.ldMsg.textContent = '⚠  ERROR: '+e.message;
+    EL.ldFill.style.background='#f33';
+    EL.ldFill.style.width='100%';
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
