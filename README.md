@@ -1,3 +1,6 @@
+#currently in progress and fixing major glitches
+
+
 🌍 BOLT EARTH LIVE
 
 A real-time 3D global airspace intelligence dashboard powered by live public aviation data.
